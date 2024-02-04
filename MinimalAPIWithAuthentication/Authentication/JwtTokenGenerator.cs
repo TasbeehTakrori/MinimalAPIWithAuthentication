@@ -1,5 +1,6 @@
 ﻿using Microsoft.IdentityModel.Tokens;
 using MinimalAPIWithAuthentication.Entities;
+using MinimalAPIWithAuthentication.Enums;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
@@ -28,13 +29,14 @@ namespace MinimalAPIWithAuthentication.Authentication
                 Subject = new ClaimsIdentity(new[]
                 {
                 new Claim(JwtRegisteredClaimNames.Name, user.Name),
+                new Claim(ClaimTypes.Role, Enum.GetName(typeof(Role), user.Role)),
             }),
                 Expires = DateTime.UtcNow.AddMinutes(20),
                 Issuer = _issuer,
                 Audience = _audience,
                 SigningCredentials = new SigningCredentials
                 (new SymmetricSecurityKey(_key),
-                SecurityAlgorithms.HmacSha512Signature)
+                SecurityAlgorithms.HmacSha256)
             };
 
             var tokenHandler = new JwtSecurityTokenHandler();
