@@ -1,73 +1,45 @@
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using MinimalAPIWithAuthentication.Authentication;
-using MinimalAPIWithAuthentication.DTOs;
-using MinimalAPIWithAuthentication.Entities;
-using MinimalAPIWithAuthentication.Enums;
 using MinimalAPIWithAuthentication.Repository;
-using System.Security.Claims;
-using System.Text;
+using Asp.Versioning;
+using Asp.Versioning.Conventions;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddAuthentication(options =>
-{
-    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    options.DefaultScheme = JwtBearerDefaults.AuthenticationScheme;
-}).AddJwtBearer(o =>
-{
-    o.TokenValidationParameters = new TokenValidationParameters
-    {
-        ValidIssuer = builder.Configuration["Jwt:Issuer"],
-        ValidAudience = builder.Configuration["Jwt:Audience"],
-        IssuerSigningKey = new SymmetricSecurityKey
-        (Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"])),
-        ValidateIssuer = true,
-        ValidateAudience = true,
-        ValidateLifetime = true,
-        ValidateIssuerSigningKey = true
-    };
-});
-builder.Services.AddAuthorization(options =>
-{
-    options.AddPolicy("AdminPolicy", policy =>
-    {
-        policy.RequireAuthenticatedUser();
-        policy.RequireClaim(ClaimTypes.Role, "Admin");
-    });
-});
-
-
-
+builder.Services.Configure<JwtSettings>(builder.Configuration.GetSection("Jwt"));
 builder.Services.AddSingleton<ITokenGenerator, JwtTokenGenerator>();
 builder.Services.AddSingleton<IRepository, Repository>();
+builder.Services.AddSingleton<IRepository, Repository>();
+
+builder.Services.AddJwtAuthentication(builder.Configuration);
+builder.Services.AddJwtAuthorization();
+
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new ApiVersion(1, 0);
+    options.AssumeDefaultVersionWhenUnspecified = true;
+    options.ReportApiVersions = true;
+    options.ApiVersionReader = new HeaderApiVersionReader("Api-Version");
+});
 
 var app = builder.Build();
 
-app.MapPost("/login", ([FromBody] AuthenticationRequestBody authenticationRequestBody, ITokenGenerator tokenGenerator, IRepository repository) =>
-{
-    var user = repository.Find(authenticationRequestBody.UserName, authenticationRequestBody.Password);
-    if (user is null)
-        return Results.NotFound(new { message = "Invalid username or password" });
+var versionSet = app.NewApiVersionSet()
+                    .HasApiVersion(1.0)
+                    .ReportApiVersions()
+                    .Build();
 
-    var token = tokenGenerator.GenerateToken(user);
-    var userResponse = new UserResponseDTO
-    {
-        Token = token,
-        Name = user.Name,
-        Role = Enum.GetName(typeof(Role), user.Role)
-    };
-    return Results.Ok(userResponse);
-});
+app.MapPost("/login", LoginHandler.HandleLogin)
+    .WithApiVersionSet(versionSet).IsApiVersionNeutral();
 
-app.MapGet("/hello", () => "Hello World!");
+app.MapGet("/hello", () => "Hello World!")
+    .WithApiVersionSet(versionSet).IsApiVersionNeutral(); ;
 
 app.MapGet("/helloUser", () => "Hello User!")
-    .RequireAuthorization();
+    .RequireAuthorization()
+    .WithApiVersionSet(versionSet).IsApiVersionNeutral(); ;
 
 app.MapGet("/helloAdmin", () => "Hello Admin!")
-    .RequireAuthorization("AdminPolicy");
+    .RequireAuthorization("AdminPolicy")
+    .WithApiVersionSet(versionSet).IsApiVersionNeutral(); ;
 
 app.Run();

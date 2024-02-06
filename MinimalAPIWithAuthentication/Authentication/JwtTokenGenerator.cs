@@ -2,6 +2,7 @@
 using MinimalAPIWithAuthentication.Entities;
 using MinimalAPIWithAuthentication.Enums;
 using System.IdentityModel.Tokens.Jwt;
+using Microsoft.Extensions.Options;
 using System.Security.Claims;
 using System.Text;
 
@@ -11,15 +12,15 @@ namespace MinimalAPIWithAuthentication.Authentication
     {
         private readonly string _issuer;
         private readonly string _audience;
+        private readonly int _expiresMinutes;
         private readonly byte[] _key;
-        public JwtTokenGenerator(IConfiguration configuration)
+        public JwtTokenGenerator(IOptions<JwtSettings> jwtSettingsOptions)
         {
-            if (configuration is null)
-                throw new ArgumentNullException(nameof(configuration));
-
-            _issuer = configuration["Jwt:Issuer"];
-            _audience = configuration["Jwt:Audience"];
-            _key = Encoding.ASCII.GetBytes(configuration["Jwt:Key"]);
+            var jwtSettings = jwtSettingsOptions.Value;
+            _issuer = jwtSettings.Issuer;
+            _audience = jwtSettings.Audience;
+            _expiresMinutes = jwtSettings.ExpiresMinutes;
+            _key = Encoding.ASCII.GetBytes(jwtSettings.Key);
         }
 
         public string GenerateToken(User user)
@@ -28,10 +29,10 @@ namespace MinimalAPIWithAuthentication.Authentication
             {
                 Subject = new ClaimsIdentity(new[]
                 {
-                new Claim(JwtRegisteredClaimNames.Name, user.Name),
+                new Claim(JwtRegisteredClaimNames.Name, user.Name!),
                 new Claim(ClaimTypes.Role, Enum.GetName(typeof(Role), user.Role)),
             }),
-                Expires = DateTime.UtcNow.AddMinutes(20),
+                Expires = DateTime.UtcNow.AddMinutes(_expiresMinutes),
                 Issuer = _issuer,
                 Audience = _audience,
                 SigningCredentials = new SigningCredentials
